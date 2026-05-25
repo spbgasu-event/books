@@ -1,0 +1,27 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Bubblewrap / TWA сборки (не коммитим APK и ключи)
+*.apk
+*.aab
+*.keystore
+*.jks
+android.keystore
+twa-manifest.json.bak
+
+# Bubblewrap workspace
+/twa/
+/app/build/
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
