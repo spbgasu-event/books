@@ -1,0 +1,50 @@
+.books-list{padding:0 16px 24px; display:flex; flex-direction:column; gap:12px;}
+
+.book-card{
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:14px; padding:16px; cursor:pointer;
+  transition:transform .1s; position:relative;
+}
+.book-card:active{transform:scale(0.98);}
+
+.book-title{
+  font-family:'Playfair Display',serif;
+  font-size:17px; font-weight:700;
+  margin-bottom:4px; padding-right:60px;
+}
+.book-author{font-size:12px; color:var(--muted); margin-bottom:10px;}
+
+.book-langs{display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;}
+.lang-badge{
+  font-size:11px; font-weight:600;
+  padding:3px 9px; border-radius:20px;
+}
+.lang-badge.en{background:rgba(74,144,217,0.15); color:var(--en); border:1px solid rgba(74,144,217,0.25);}
+.lang-badge.ru{background:rgba(217,85,85,0.12); color:var(--ru); border:1px solid rgba(217,85,85,0.2);}
+.lang-badge.miss{background:var(--surface2); color:var(--muted); border:1px solid var(--border);}
+
+.book-progress-bar{
+  height:3px; background:var(--surface2); border-radius:2px; margin-bottom:6px;
+}
+.book-progress-fill{height:100%; background:var(--accent); border-radius:2px;}
+
+.book-meta{
+  font-size:11px; color:var(--muted);
+  display:flex; justify-content:space-between;
+}
+.book-actions{
+  position:absolute; top:14px; right:14px;
+  display:flex; gap:6px;
+}
+
+/* Плавающая кнопка добавления */
+.fab{
+  position:fixed; right:20px;
+  bottom:calc(76px + var(--safe-bottom));
+  width:56px; height:56px; border-radius:50%;
+  background:var(--accent); color:#1a1200; border:none;
+  font-size:28px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  cursor:pointer; z-index:80;
+  display:flex; align-items:center; justify-content:center;
+}
+.fab:active{transform:scale(0.94);}

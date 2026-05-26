@@ -1,4 +1,5 @@
-const VERSION = 'v1.0.0';
+// Версия меняется при каждом релизе — это триггер для обновления кэша
+const VERSION = 'v0.2.0';
 const APP_CACHE = `linguaread-app-${VERSION}`;
 const FONTS_CACHE = `linguaread-fonts-${VERSION}`;
 
@@ -6,6 +7,25 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './styles/main.css',
+  './styles/library.css',
+  './styles/reader.css',
+  './styles/review.css',
+  './styles/words.css',
+  './styles/settings.css',
+  './styles/modal.css',
+  './js/state.js',
+  './js/db.js',
+  './js/file-parsers.js',
+  './js/translator.js',
+  './js/srs.js',
+  './js/word-popup.js',
+  './js/reader.js',
+  './js/library.js',
+  './js/review.js',
+  './js/words.js',
+  './js/settings.js',
+  './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-192.png',
@@ -35,19 +55,19 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(req.url);
 
+  // API LLM — никогда не кэшируем
   if (url.hostname.includes('api.mistral.ai') ||
-      url.hostname.includes('api.deepseek.com') ||
-      url.hostname.includes('firestore.googleapis.com') ||
-      url.hostname.includes('identitytoolkit.googleapis.com') ||
-      url.hostname.includes('script.google.com')) {
+      url.hostname.includes('api.deepseek.com')) {
     return;
   }
 
+  // Шрифты Google — stale-while-revalidate (быстро + обновление в фоне)
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     event.respondWith(staleWhileRevalidate(req, FONTS_CACHE));
     return;
   }
 
+  // Свои файлы — cache-first
   if (url.origin === self.location.origin) {
     event.respondWith(cacheFirst(req, APP_CACHE));
     return;
