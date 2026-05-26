@@ -22,18 +22,25 @@ function openBook(id){
   if (!b) return;
 
   R.bookId = id;
-  const prog = b.progress || {chapIdx:0, lang:'en', anchorRatio:0};
+  const prog = b.progress || {chapIdx:0, lang:'en', paraIdx:0, anchorRatio:0};
   R.lang = prog.lang || (b.enChaps ? 'en' : 'ru');
   R.chapIdx = prog.chapIdx || 0;
 
   document.getElementById('rTitle').textContent = b.title;
   document.getElementById('readerPage').classList.add('active');
+  document.body.classList.add('reading');
   updateLangToggle();
 
   // Откладываем рендер чтобы CSS успел применить размеры контейнера
   requestAnimationFrame(() => {
     paginateCurrentChapter();
-    R.pageIdx = anchorToPageIndex(prog.anchorRatio || 0);
+    // Если сохранён paraIdx — используем его (точное возвращение на страницу).
+    // Если нет — fallback на anchorRatio (старая запись или после смены языка).
+    if (typeof prog.paraIdx === 'number'){
+      R.pageIdx = paraIdxToPageIndex(prog.paraIdx);
+    } else {
+      R.pageIdx = anchorRatioToPageIndex(prog.anchorRatio || 0);
+    }
     renderCurrentPage();
   });
 }
@@ -41,6 +48,7 @@ function openBook(id){
 function closeReader(){
   saveProgress();
   document.getElementById('readerPage').classList.remove('active');
+  document.body.classList.remove('reading');
   closeWPopup();
   renderLibrary();
 }
@@ -198,25 +206,51 @@ function updateReaderFoot(){
 }
 
 /**
- * Якорь — доля прочитанного в главе [0..1].
- * Используется для сохранения позиции и переключения языка.
+ * Якорь — индекс первого видимого абзаца на текущей странице (внутри главы).
+ * Это значение надёжно: открываешь книгу — попадаешь на ту страницу, где остался.
+ * При переключении языка — попадаешь в ту же относительную точку.
  */
 function currentAnchor(){
   if (!R.pages.length) return 0;
-  if (R.pages.length === 1) return 0;
   const page = R.pages[R.pageIdx];
-  if (R.totalParas <= 1) return R.pageIdx / (R.pages.length - 1);
-  return Math.min(1, page.paraFrom / R.totalParas);
+  return page ? (page.paraFrom || 0) : 0;
 }
 
-function anchorToPageIndex(ratio){
+/**
+ * Доля прочитанного [0..1] — нужна для переключения языков
+ * (т.к. в RU-главе число абзацев другое, а доля сохраняется).
+ */
+function currentAnchorRatio(){
+  if (!R.pages.length || !R.totalParas) return 0;
+  const para = currentAnchor();
+  return Math.min(0.999, para / R.totalParas);
+}
+
+/**
+ * Находит страницу, на которой находится абзац с заданным индексом.
+ */
+function paraIdxToPageIndex(paraIdx){
   if (!R.pages.length) return 0;
-  const targetPara = Math.floor(ratio * (R.totalParas || 1));
   let bestIdx = 0;
   for (let i = 0; i < R.pages.length; i++){
-    if (R.pages[i].paraFrom <= targetPara) bestIdx = i; else break;
+    if (R.pages[i].paraFrom <= paraIdx) bestIdx = i;
+    else break;
   }
   return bestIdx;
+}
+
+/**
+ * При переключении языка — переводим долю в номер абзаца новой главы.
+ */
+function anchorRatioToPageIndex(ratio){
+  if (!R.pages.length) return 0;
+  const targetPara = Math.floor((ratio || 0) * (R.totalParas || 1));
+  return paraIdxToPageIndex(targetPara);
+}
+
+/** Алиас для обратной совместимости */
+function anchorToPageIndex(ratio){
+  return anchorRatioToPageIndex(ratio);
 }
 
 function nextPage(){
@@ -251,8 +285,8 @@ function prevPage(){
 }
 
 /**
- * Переключение языка — сохраняем якорь, меняем язык, репагинируем,
- * прыгаем на ту же относительную позицию.
+ * Переключение языка — сохраняем долю прочитанного, меняем язык, репагинируем,
+ * прыгаем на ту же относительную позицию в новой главе.
  */
 function switchReaderLang(lang){
   const book = S.books.find(b => b.id === R.bookId);
@@ -263,7 +297,7 @@ function switchReaderLang(lang){
     return;
   }
 
-  const anchor = currentAnchor();
+  const ratio = currentAnchorRatio();
   R.lang = lang;
 
   const chaps = getChaps(book, lang);
@@ -271,7 +305,7 @@ function switchReaderLang(lang){
 
   updateLangToggle();
   paginateCurrentChapter();
-  R.pageIdx = anchorToPageIndex(anchor);
+  R.pageIdx = anchorRatioToPageIndex(ratio);
   renderCurrentPage();
   closeWPopup();
 }
@@ -279,10 +313,14 @@ function switchReaderLang(lang){
 async function saveProgress(){
   const book = S.books.find(b => b.id === R.bookId);
   if (!book) return;
+  // Защита: если страницы ещё не сверстаны — не перезаписываем прогресс
+  if (!R.pages.length) return;
+
   book.progress = {
     chapIdx: R.chapIdx,
     lang: R.lang,
-    anchorRatio: currentAnchor(),
+    paraIdx: currentAnchor(),         // индекс первого абзаца на странице
+    anchorRatio: currentAnchorRatio(), // для переключения языков
     updatedAt: Date.now()
   };
   await saveBook(book);
@@ -296,9 +334,9 @@ function adjustReaderFont(delta){
   if (el2) el2.textContent = newSize;
 
   if (document.getElementById('readerPage').classList.contains('active')){
-    const anchor = currentAnchor();
+    const ratio = currentAnchorRatio();
     paginateCurrentChapter();
-    R.pageIdx = anchorToPageIndex(anchor);
+    R.pageIdx = anchorRatioToPageIndex(ratio);
     renderCurrentPage();
   }
 }

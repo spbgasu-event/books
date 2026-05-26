@@ -124,6 +124,12 @@ nav{
 }
 .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
+/* В режиме чтения скрываем нижнюю навигацию и FAB — они только мешают */
+body.reading nav,
+body.reading .fab{
+  display:none !important;
+}
+
 /* Адаптация на широких экранах */
 @media (min-width: 720px){
   nav{max-width:680px; margin:0 auto; left:50%; transform:translateX(-50%); border-radius:12px 12px 0 0;}

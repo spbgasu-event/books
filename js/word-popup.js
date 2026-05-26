@@ -64,10 +64,16 @@ function showWordPopup(existing){
     </div>
   `;
   popup.classList.add('open');
+  // Прячем нижнюю плашку, чтобы не наезжать на попап
+  document.getElementById('rFoot').classList.add('hidden');
 }
 
 function closeWPopup(){
   document.getElementById('wPopup').classList.remove('open');
+  // Возвращаем нижнюю плашку, если читалка ещё открыта
+  if (!toolbarHidden && document.getElementById('readerPage').classList.contains('active')){
+    document.getElementById('rFoot').classList.remove('hidden');
+  }
 }
 
 async function translateWord(){

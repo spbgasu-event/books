@@ -37,9 +37,9 @@ window.addEventListener('resize', () => {
   if (!document.getElementById('readerPage').classList.contains('active')) return;
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    const anchor = currentAnchor();
+    const ratio = currentAnchorRatio();
     paginateCurrentChapter();
-    R.pageIdx = anchorToPageIndex(anchor);
+    R.pageIdx = anchorRatioToPageIndex(ratio);
     renderCurrentPage();
   }, 200);
 });

@@ -1,5 +1,5 @@
 // Версия меняется при каждом релизе — это триггер для обновления кэша
-const VERSION = 'v0.2.0';
+const VERSION = 'v0.2.1';
 const APP_CACHE = `linguaread-app-${VERSION}`;
 const FONTS_CACHE = `linguaread-fonts-${VERSION}`;
 
