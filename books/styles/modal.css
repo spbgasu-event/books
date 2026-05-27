@@ -1,0 +1,42 @@
+.overlay{
+  display:none; position:fixed; inset:0; z-index:200;
+  background:rgba(0,0,0,0.75); backdrop-filter:blur(6px);
+  align-items:flex-end; justify-content:center;
+}
+.overlay.open{display:flex;}
+
+.modal{
+  background:var(--surface); border-top:1px solid var(--border);
+  border-radius:20px 20px 0 0;
+  padding:24px 20px;
+  padding-bottom:calc(24px + var(--safe-bottom));
+  width:100%; max-width:560px; max-height:92vh; overflow-y:auto;
+  animation:slideUp .25s ease;
+}
+@keyframes slideUp{
+  from{transform:translateY(20px); opacity:0;}
+  to{transform:translateY(0); opacity:1;}
+}
+.modal h2{
+  font-family:'Playfair Display',serif;
+  font-size:22px; margin-bottom:18px;
+}
+
+/* Перетаскивание/выбор файла */
+.file-drop{
+  border:2px dashed var(--border); border-radius:12px;
+  padding:18px; text-align:center;
+  position:relative; min-height:80px;
+}
+.file-drop input[type=file]{
+  position:absolute; inset:0; opacity:0; width:100%; height:100%;
+}
+.fd-icon{font-size:24px; margin-bottom:6px;}
+.fd-text{font-size:13px; color:var(--muted);}
+.fd-text strong{color:var(--accent);}
+.fd-name{margin-top:6px; font-size:12px; color:var(--accent); font-weight:500;}
+
+.modal-actions{
+  display:flex; gap:10px; justify-content:flex-end;
+  margin-top:18px;
+}

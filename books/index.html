@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"/>
+<title>LinguaRead</title>
+
+<link rel="manifest" href="manifest.webmanifest"/>
+<meta name="theme-color" content="#0e0e0f"/>
+<meta name="application-name" content="LinguaRead"/>
+<meta name="description" content="Билингвальное чтение книг с переводчиком и интервальным повторением"/>
+
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="LinguaRead"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"/>
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png"/>
+
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
+<link rel="stylesheet" href="styles/main.css"/>
+<link rel="stylesheet" href="styles/library.css"/>
+<link rel="stylesheet" href="styles/reader.css"/>
+<link rel="stylesheet" href="styles/review.css"/>
+<link rel="stylesheet" href="styles/words.css"/>
+<link rel="stylesheet" href="styles/settings.css"/>
+<link rel="stylesheet" href="styles/modal.css"/>
+</head>
+<body>
+
+<!-- Нижняя навигация -->
+<nav>
+  <button class="nav-btn active" data-page="library" onclick="switchPage('library')">
+    <div class="nav-ico">📚</div>
+    <div>Книги</div>
+  </button>
+  <button class="nav-btn" data-page="review" onclick="switchPage('review')">
+    <div class="nav-ico">🃏</div>
+    <div>Карточки</div>
+    <div class="nav-badge" id="navBadgeReview" style="display:none;">0</div>
+  </button>
+  <button class="nav-btn" data-page="words" onclick="switchPage('words')">
+    <div class="nav-ico">📝</div>
+    <div>Словарь</div>
+  </button>
+  <button class="nav-btn" data-page="settings" onclick="switchPage('settings')">
+    <div class="nav-ico">⚙️</div>
+    <div>Настройки</div>
+  </button>
+</nav>
+
+<!-- Библиотека -->
+<div class="page active" id="pageLibrary">
+  <div class="page-header">
+    <div class="page-title">Lingua<span>Read</span></div>
+  </div>
+  <div class="books-list" id="booksList"></div>
+</div>
+<button class="fab" id="fabAdd" onclick="openAddBook()">＋</button>
+
+<!-- Карточки -->
+<div class="page" id="pageReview">
+  <div class="page-header">
+    <div class="page-title">Кар<span>точки</span></div>
+  </div>
+  <div class="review-page" id="reviewPage"></div>
+</div>
+
+<!-- Словарь -->
+<div class="page" id="pageWords">
+  <div class="page-header">
+    <div class="page-title">Сло<span>варь</span></div>
+    <div style="font-size:12px;color:var(--muted);" id="wcFull">0</div>
+  </div>
+  <div class="wl-search">
+    <span class="wl-search-icon">🔍</span>
+    <input class="fi" type="text" placeholder="Поиск по слову или переводу" oninput="filterWords(this.value)"/>
+  </div>
+  <div class="wl-list" id="wordsList"></div>
+</div>
+
+<!-- Настройки -->
+<div class="page" id="pageSettings">
+  <div class="page-header">
+    <div class="page-title">Настр<span>ойки</span></div>
+  </div>
+  <div class="settings-page">
+
+    <div class="settings-section">
+      <h3>Переводчик</h3>
+      <div class="fg">
+        <label class="fl">Провайдер</label>
+        <select class="api-sel" id="apiModel" style="width:100%;">
+          <option value="mistral">Mistral (mistral-small-latest)</option>
+          <option value="deepseek">DeepSeek (deepseek-chat)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="fl">API ключ</label>
+        <input class="fi" id="apiKey" type="password" placeholder="Вставь ключ..."/>
+        <div class="settings-row-hint" style="margin-top:6px;">
+          Mistral → <a href="https://console.mistral.ai/api-keys" target="_blank">console.mistral.ai</a><br>
+          DeepSeek → <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="saveApiSettings()">Сохранить</button>
+    </div>
+
+    <div class="settings-section">
+      <h3>Чтение</h3>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Размер шрифта</div>
+          <div class="settings-row-hint">Применяется при следующем открытии книги</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="ca-btn" onclick="adjustReaderFont(-1)">A−</button>
+          <span id="readerFontLabel" style="min-width:32px;text-align:center;font-size:13px;">18</span>
+          <button class="ca-btn" onclick="adjustReaderFont(1)">A＋</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Данные</h3>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Резервная копия словаря</div>
+          <div class="settings-row-hint">Скачать TXT со всеми словами</div>
+        </div>
+        <button class="btn-sec" onclick="exportWords()">Скачать</button>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Очистить всё</div>
+          <div class="settings-row-hint">Удалит книги, словарь и карточки</div>
+        </div>
+        <button class="btn-danger" onclick="clearAll()">Очистить</button>
+      </div>
+    </div>
+
+    <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:20px;">
+      LinguaRead · версия 0.2 · локально на устройстве
+    </div>
+  </div>
+</div>
+
+<!-- Читалка (поверх) -->
+<div class="reader-page" id="readerPage">
+  <div class="r-toolbar" id="rToolbar">
+    <button class="r-back" onclick="closeReader()">←</button>
+    <div class="r-title" id="rTitle">Книга</div>
+    <div class="lang-toggle" id="rLangToggle">
+      <button class="lt-btn en" data-lang="en" onclick="switchReaderLang('en')">EN</button>
+      <button class="lt-btn ru" data-lang="ru" onclick="switchReaderLang('ru')">RU</button>
+    </div>
+    <button class="r-menu-btn" onclick="openReaderMenu()">⋯</button>
+  </div>
+
+  <div class="r-pager" id="rPager">
+    <div class="r-tap-zone left" id="rTapLeft"></div>
+    <div class="r-tap-zone right" id="rTapRight"></div>
+    <div class="r-page" id="rPage"></div>
+  </div>
+
+  <div class="r-foot" id="rFoot">
+    <span id="rFootChap">Глава 1</span>
+    <div class="r-foot-prog"><div class="r-foot-prog-fill" id="rFootProgFill"></div></div>
+    <span id="rFootPage">1 / 1</span>
+  </div>
+
+  <div class="w-popup" id="wPopup"></div>
+</div>
+
+<!-- Модалка добавления книги -->
+<div class="overlay" id="addBookOverlay">
+  <div class="modal">
+    <h2>Новая книга</h2>
+    <div class="fg">
+      <label class="fl">Название</label>
+      <input class="fi" id="nbTitle" placeholder="Например: 1984"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Автор</label>
+      <input class="fi" id="nbAuthor" placeholder="Джордж Оруэлл"/>
+    </div>
+    <div class="fg">
+      <label class="fl">Английский текст · .txt .epub .fb2</label>
+      <div class="file-drop">
+        <div class="fd-icon">🇬🇧</div>
+        <div class="fd-text"><strong>Выбрать файл</strong> на английском</div>
+        <div class="fd-name" id="fdEnName"></div>
+        <input type="file" accept=".txt,.epub,.fb2,.TXT,.EPUB,.FB2" id="fileEn" onchange="readFile('fileEn','en','fdEnName')"/>
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Русский перевод · .txt .epub .fb2 (опционально)</label>
+      <div class="file-drop">
+        <div class="fd-icon">🇷🇺</div>
+        <div class="fd-text"><strong>Выбрать файл</strong> на русском</div>
+        <div class="fd-name" id="fdRuName"></div>
+        <input type="file" accept=".txt,.epub,.fb2,.TXT,.EPUB,.FB2" id="fileRu" onchange="readFile('fileRu','ru','fdRuName')"/>
+      </div>
+    </div>
+    <div class="fg">
+      <label class="fl">Разделитель глав (опционально)</label>
+      <input class="fi" id="nbSep" placeholder="Например: Chapter или Глава"/>
+      <div class="settings-row-hint" style="margin-top:6px;">Если пусто — разобьём автоматически</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sec" onclick="closeOverlay('addBookOverlay')">Отмена</button>
+      <button class="btn-primary" onclick="addBook()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Меню читалки -->
+<div class="overlay" id="readerMenuOverlay">
+  <div class="modal">
+    <h2>Книга</h2>
+    <div class="settings-row" style="cursor:pointer;" onclick="openChapPicker()">
+      <div>
+        <div class="settings-row-label">Перейти к главе</div>
+        <div class="settings-row-hint" id="rmCurrentChap">—</div>
+      </div>
+      <span style="color:var(--muted);">›</span>
+    </div>
+    <div class="settings-row">
+      <div>
+        <div class="settings-row-label">Размер шрифта</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="ca-btn" onclick="adjustReaderFont(-1)">A−</button>
+        <span id="readerFontLabel2" style="min-width:32px;text-align:center;font-size:13px;">18</span>
+        <button class="ca-btn" onclick="adjustReaderFont(1)">A＋</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sec" onclick="closeOverlay('readerMenuOverlay')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- Список глав -->
+<div class="overlay" id="chapPickerOverlay">
+  <div class="modal">
+    <h2>Главы</h2>
+    <div id="chapPickerList" style="display:flex;flex-direction:column;gap:6px;max-height:60vh;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn-sec" onclick="closeOverlay('chapPickerOverlay')">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Порядок скриптов важен: сначала состояние и DB, затем модули, в конце — bootstrap -->
+<script src="js/state.js"></script>
+<script src="js/db.js"></script>
+<script src="js/file-parsers.js"></script>
+<script src="js/translator.js"></script>
+<script src="js/srs.js"></script>
+<script src="js/word-popup.js"></script>
+<script src="js/reader.js"></script>
+<script src="js/library.js"></script>
+<script src="js/review.js"></script>
+<script src="js/words.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
