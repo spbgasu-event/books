@@ -1,0 +1,123 @@
+/* Модалка align — шире обычной */
+.align-modal{
+  max-width: 900px;
+  max-height: 95vh;
+}
+
+.align-help{
+  font-size:12px; color:var(--muted);
+  line-height:1.5; margin-bottom:10px;
+}
+
+.align-counter{
+  font-size:11px; color:var(--accent);
+  background:var(--surface2); padding:6px 10px;
+  border-radius:8px; margin-bottom:12px;
+  display:inline-block;
+}
+
+/* Две колонки EN / RU */
+.align-cols{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-bottom:14px;
+}
+.align-col{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+.align-col-head{
+  padding:8px 12px;
+  font-size:11px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted);
+  border-bottom:1px solid var(--border);
+}
+.align-col-list{
+  overflow-y:auto;
+  max-height:50vh;
+  padding:6px;
+}
+
+/* Карточка главы */
+.align-chap{
+  padding:8px 10px;
+  border-radius:8px;
+  margin-bottom:4px;
+  cursor:pointer;
+  border:1px solid transparent;
+  transition: background .1s, border-color .1s;
+}
+.align-chap:active{transform:scale(0.99);}
+.align-chap.unpaired{
+  background:rgba(201,110,110,0.06);
+  border-color:rgba(201,110,110,0.18);
+}
+.align-chap.paired{
+  background:rgba(110,201,126,0.04);
+  border-color:rgba(110,201,126,0.18);
+}
+.align-chap.selected{
+  background:rgba(200,169,110,0.18);
+  border-color:var(--accent);
+}
+.align-chap-num{
+  font-size:10px; font-weight:600;
+  color:var(--muted);
+  letter-spacing:.05em;
+  margin-bottom:2px;
+}
+.align-chap-title{
+  font-family:'Lora',serif;
+  font-size:13px; line-height:1.3;
+  color:var(--text);
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  margin-bottom:3px;
+}
+.align-chap-pair{
+  font-size:10px;
+  color:var(--accent);
+}
+.align-chap-pair i{color:var(--muted); font-style:italic;}
+
+/* Кнопки действий */
+.align-actions{
+  display:flex; gap:8px; justify-content:center;
+  padding:10px 0;
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+  margin-bottom:12px;
+}
+.align-actions .btn-sec,
+.align-actions .btn-primary{
+  padding:8px 16px;
+  font-size:13px;
+}
+.align-actions button:disabled{
+  opacity:0.4;
+  pointer-events:none;
+}
+
+/* На узких экранах — две колонки рядом всё равно (компактный вариант) */
+@media (max-width: 500px){
+  .align-col-head{font-size:10px;padding:6px 8px;}
+  .align-chap{padding:6px 8px;}
+  .align-chap-title{font-size:12px;}
+  .align-actions{flex-wrap:wrap;}
+}
+
+/* Индикатор «есть сведение» в карточке книги */
+.ca-btn.aligned{
+  background:rgba(110,201,126,0.15);
+  color:var(--success);
+  border-color:rgba(110,201,126,0.3);
+}

@@ -27,6 +27,7 @@
 <link rel="stylesheet" href="styles/words.css"/>
 <link rel="stylesheet" href="styles/settings.css"/>
 <link rel="stylesheet" href="styles/modal.css"/>
+<link rel="stylesheet" href="styles/alignment.css"/>
 </head>
 <body>
 
@@ -243,6 +244,37 @@
   </div>
 </div>
 
+<!-- Сведение глав (align) -->
+<div class="overlay" id="alignOverlay">
+  <div class="modal align-modal">
+    <h2>Сведение глав <span id="alignBookTitle" style="color:var(--muted);font-size:14px;font-weight:400;"></span></h2>
+    <p class="align-help">
+      Тапни главу слева (EN) и главу справа (RU), затем нажми «Привязать».
+      Глава может быть привязана только к одной паре. Не привязанные главы при переключении языка пропускаются.
+    </p>
+    <div class="align-counter" id="alignCounter"></div>
+    <div class="align-cols">
+      <div class="align-col">
+        <div class="align-col-head">English</div>
+        <div class="align-col-list" id="alignEnList"></div>
+      </div>
+      <div class="align-col">
+        <div class="align-col-head">Русский</div>
+        <div class="align-col-list" id="alignRuList"></div>
+      </div>
+    </div>
+    <div class="align-actions">
+      <button class="btn-sec" onclick="alignAuto()">Авто 1-к-1</button>
+      <button class="btn-sec" id="alignUnlinkBtn" onclick="alignUnlink()">Отвязать</button>
+      <button class="btn-primary" id="alignLinkBtn" onclick="alignLink()">Привязать</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sec" onclick="cancelAlign()">Отмена</button>
+      <button class="btn-primary" onclick="saveAlign()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
 <!-- Список глав -->
 <div class="overlay" id="chapPickerOverlay">
   <div class="modal">
@@ -263,6 +295,7 @@
 <script src="js/translator.js"></script>
 <script src="js/srs.js"></script>
 <script src="js/word-popup.js"></script>
+<script src="js/alignment.js"></script>
 <script src="js/reader.js"></script>
 <script src="js/library.js"></script>
 <script src="js/review.js"></script>

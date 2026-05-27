@@ -83,15 +83,21 @@ function parseFb2Xml(xmlString){
 }
 
 /**
- * Парсит EPUB: ZIP с HTML внутри + манифест OPF, указывающий порядок чтения.
- * Использует JSZip (подгружается лениво из CDN при первом вызове).
+ * Парсит EPUB → массив глав [{title, content}].
+ *
+ * Каждый xhtml-файл из spine — отдельная глава. Это естественная структура EPUB,
+ * не нужно потом дробить текст по разделителям.
+ *
+ * @param {File} file
+ * @param {function} [onProgress] — колбэк прогресса (0..1) для индикации
+ * @returns {Promise<{chapters: Array, fullText: string}>}
  */
-async function readEpub(file){
+async function readEpubChapters(file, onProgress){
   await ensureJSZip();
   const buf = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(buf);
 
-  // Шаг 1: найти container.xml — он скажет где лежит OPF-манифест
+  // 1. container.xml → путь до OPF
   const containerFile = zip.file('META-INF/container.xml');
   let opfPath = null;
   if (containerFile){
@@ -100,7 +106,7 @@ async function readEpub(file){
     if (m) opfPath = m[1];
   }
 
-  // Шаг 2: разобрать OPF, чтобы получить порядок глав (spine)
+  // 2. Манифест и spine
   let orderedFiles = [];
   let opfDir = '';
 
@@ -111,13 +117,16 @@ async function readEpub(file){
       const opfXml = await opfFile.async('string');
       const opfDoc = new DOMParser().parseFromString(opfXml, 'application/xml');
 
-      // Манифест: id → href
       const manifest = {};
       opfDoc.querySelectorAll('manifest item').forEach(item => {
-        manifest[item.getAttribute('id')] = item.getAttribute('href');
+        const id = item.getAttribute('id');
+        const href = item.getAttribute('href');
+        const mediaType = item.getAttribute('media-type') || '';
+        if (id && href && mediaType.includes('xhtml')){
+          manifest[id] = href;
+        }
       });
 
-      // Spine: какие idref в каком порядке
       opfDoc.querySelectorAll('spine itemref').forEach(ref => {
         const href = manifest[ref.getAttribute('idref')];
         if (href) orderedFiles.push(opfDir + href);
@@ -125,40 +134,120 @@ async function readEpub(file){
     }
   }
 
-  // Фолбэк: если OPF не разобрался — просто берём все html/xhtml в алфавитном порядке
+  // Фолбэк
   if (!orderedFiles.length){
     orderedFiles = Object.keys(zip.files)
       .filter(k => /\.(x?html|htm)$/i.test(k) && !zip.files[k].dir)
       .sort();
   }
 
-  // Шаг 3: извлекаем текст из каждого файла в правильном порядке
-  let text = '';
-  for (const key of orderedFiles){
-    const f = zip.file(key);
-    if (!f) continue;
-    const html = await f.async('string');
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    // Чистим служебные теги
-    doc.querySelectorAll('script,style,nav,header,footer').forEach(el => el.remove());
-    // Превращаем блочные элементы в абзацы с разделением \n\n
-    const blocks = doc.body?.querySelectorAll('p,h1,h2,h3,h4,h5,h6,div,blockquote,li') || [];
-    if (blocks.length){
-      blocks.forEach(b => {
-        const t = b.textContent.trim();
-        if (t.length > 1) text += t + '\n\n';
-      });
-    } else {
-      // если структуры нет — берём как есть
-      const body = doc.body?.textContent.trim() || '';
-      if (body.length > 50) text += body + '\n\n';
-    }
+  if (!orderedFiles.length){
+    throw new Error('EPUB: spine пустой, не нашёл текстовых файлов');
   }
 
-  if (!text || text.trim().length < 50){
-    throw new Error('EPUB прочитан, но текст не извлёкся (возможно, защищён DRM)');
+  // 3. Параллельно читаем все файлы, потом извлекаем текст
+  const total = orderedFiles.length;
+  const chapters = [];
+
+  // Распакуем сразу все строки параллельно — это быстрее последовательного цикла
+  const fileContents = await Promise.all(
+    orderedFiles.map(async (key, idx) => {
+      const f = zip.file(key);
+      if (!f) return null;
+      const html = await f.async('string');
+      if (onProgress) onProgress((idx + 1) / total * 0.5); // первая половина — распаковка
+      return {key, html};
+    })
+  );
+
+  // 4. Извлекаем текст из каждого файла — это уже синхронно
+  fileContents.forEach((fc, idx) => {
+    if (!fc) return;
+    const {key, html} = fc;
+    const chap = extractChapterFromXhtml(html, key);
+    if (chap && chap.content.length > 30){
+      chapters.push(chap);
+    }
+    if (onProgress) onProgress(0.5 + (idx + 1) / total * 0.5);
+  });
+
+  if (!chapters.length){
+    throw new Error('EPUB прочитан, но текстовое содержимое пустое');
   }
-  return text;
+
+  return {
+    chapters,
+    fullText: chapters.map(c => (c.title ? c.title + '\n\n' : '') + c.content).join('\n\n')
+  };
+}
+
+/**
+ * Парсит один XHTML файл главы.
+ * Учитывает XML-декларацию (часто встречается в EPUB) — убираем её перед парсингом.
+ */
+function extractChapterFromXhtml(html, hint){
+  // 1. Срезаем XML-декларацию и DOCTYPE, они мешают DOMParser в режиме text/html
+  let cleaned = html.replace(/<\?xml[^>]*\?>/g, '').replace(/<!DOCTYPE[^>]*>/g, '');
+
+  // 2. Сначала пробуем как XHTML — если XML невалидный, упадёт в parsererror
+  let doc;
+  try {
+    doc = new DOMParser().parseFromString(cleaned, 'application/xhtml+xml');
+    if (doc.querySelector('parsererror')){
+      doc = new DOMParser().parseFromString(cleaned, 'text/html');
+    }
+  } catch(e){
+    doc = new DOMParser().parseFromString(cleaned, 'text/html');
+  }
+
+  // 3. Чистим служебное
+  doc.querySelectorAll('script,style,nav,header,footer,link,meta').forEach(el => el.remove());
+
+  // 4. Заголовок главы: <h1>/<h2>/<h3>, или элемент с class="title", или первый <p class="title">
+  let title = '';
+  const titleEl =
+    doc.querySelector('h1, h2, h3, h4') ||
+    doc.querySelector('[class*="title"]') ||
+    doc.querySelector('p.title, div.title');
+  if (titleEl) title = titleEl.textContent.trim().replace(/\s+/g, ' ').slice(0, 200);
+
+  // 5. Содержимое — все блочные элементы через \n\n
+  const body = doc.body || doc.documentElement;
+  if (!body) return null;
+
+  const blocks = [];
+  body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, blockquote, li, div.cite, div.epigraph, pre').forEach(el => {
+    // Пропускаем сам заголовок (он уже в title)
+    if (el === titleEl) return;
+    // Пропускаем элементы внутри других блоков, чтобы не дублировать
+    if (el.parentElement && el.parentElement.closest('p, blockquote, div.cite, div.epigraph, pre, li')) return;
+    const t = el.textContent.trim().replace(/\s+/g, ' ');
+    if (t.length > 1) blocks.push(t);
+  });
+
+  // Если ничего не нашли через блочные теги — берём весь текст body
+  let content = blocks.join('\n\n');
+  if (!content || content.length < 20){
+    const allText = body.textContent.trim().replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n');
+    if (allText.length > 20) content = allText;
+  }
+
+  // Если заголовок не нашли — используем подсказку из имени файла
+  if (!title && hint){
+    const m = hint.match(/([^\/]+)\.x?html$/i);
+    if (m) title = m[1];
+  }
+  if (!title) title = 'Глава';
+
+  return { title, content };
+}
+
+/**
+ * Старый API — для совместимости. Возвращает только текст.
+ */
+async function readEpub(file, onProgress){
+  const result = await readEpubChapters(file, onProgress);
+  return result.fullText;
 }
 
 /**

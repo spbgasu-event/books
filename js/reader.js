@@ -260,19 +260,19 @@ function prevPage(){
 }
 
 /**
- * Переключение языка.
+ * Переключение языка с учётом ручного align.
  *
- * Логика: запоминаем номер первого абзаца на текущей странице (paraIdx).
- * Переключаем язык, пагинируем главу с тем же номером.
- * Пытаемся открыть ту же страницу: paraIdxToPageIndex зажимает значение
- * в пределах новой главы, поэтому «утечь в конец» уже невозможно.
+ * Если у книги есть alignment.pairs — ищем парную главу в другом языке.
+ * Если соответствия нет — показываем сообщение и не переключаемся.
+ * Если align не задан — фолбэк на «та же глава по номеру» (как раньше).
  *
- * Если в новом языке глав меньше — корректно сдвигаем R.chapIdx.
- * Точное сведение глав делается через ручной align (отдельная фича).
+ * Внутри главы — сохраняем paraIdx с зажиманием по длине новой главы.
  */
 function switchReaderLang(lang){
   const book = S.books.find(b => b.id === R.bookId);
   if (!book) return;
+  if (lang === R.lang) return;
+
   const target = (lang === 'en') ? book.enChaps : book.ruChaps;
   if (!target || !target.length){
     showToast('Нет текста на этом языке');
@@ -280,11 +280,15 @@ function switchReaderLang(lang){
   }
 
   const paraIdx = currentAnchor();
-  R.lang = lang;
+  const newChapIdx = findAlignedChapter(book, R.chapIdx, R.lang, lang);
 
-  const chaps = getChaps(book, lang);
-  if (R.chapIdx >= chaps.length) R.chapIdx = chaps.length - 1;
-  if (R.chapIdx < 0) R.chapIdx = 0;
+  if (newChapIdx < 0){
+    showToast('Эта глава не привязана к другому языку. Сделай сведение через ⇄');
+    return;
+  }
+
+  R.lang = lang;
+  R.chapIdx = Math.max(0, Math.min(target.length - 1, newChapIdx));
 
   updateLangToggle();
   paginateCurrentChapter();
