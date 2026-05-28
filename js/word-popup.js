@@ -53,6 +53,11 @@ function showWordPopup(existing){
   const ctx = wCur.sentence;
   const hasDetails = !!(existing?.fullResult || wCur.lexRes);
 
+  // Показываем кнопку «Найти на другом языке» только если книга двуязычная и есть align
+  const book = S.books.find(b => b.id === R.bookId);
+  const canSearchOnOther = book && book.enChaps && book.ruChaps;
+  const otherLangLabel = R.lang === 'en' ? 'RU' : 'EN';
+
   popup.innerHTML = `
     <div class="wp-word">${escapeHtml(word)}</div>
     ${trc ? `<div class="wp-det">${escapeHtml(trc)}</div>` : ''}
@@ -60,6 +65,7 @@ function showWordPopup(existing){
     <div class="wp-ctx">${escapeHtml(ctx)}</div>
     <div class="wp-actions">
       <button class="wp-btn pr" onclick="translateWord()" id="wpTransBtn">${tr ? 'Обновить' : 'Перевести'}</button>
+      ${canSearchOnOther ? `<button class="wp-btn" onclick="searchOnOtherLang()" id="wpSearchBtn">🔍 На ${otherLangLabel}</button>` : ''}
       ${hasDetails ? `<button class="wp-btn" onclick="toggleWordDetails()" id="wpDetailsBtn">Подробно</button>` : ''}
       <button class="wp-btn ${existing?'saved':''}" onclick="saveWordFromPopup()" id="wpSaveBtn">${existing ? '✓ В словаре' : '+ В словарь'}</button>
       <button class="wp-btn" onclick="closeWPopup()">Закрыть</button>
@@ -68,6 +74,18 @@ function showWordPopup(existing){
   `;
   popup.classList.add('open');
   document.getElementById('rFoot').classList.add('hidden');
+}
+
+/**
+ * Запускает умный поиск по нажатию кнопки в попапе.
+ * Использует данные wCur — текущее слово и его контекст.
+ */
+function searchOnOtherLang(){
+  const word = wCur.word;
+  if (!word) return;
+  const btn = document.getElementById('wpSearchBtn');
+  if (btn){ btn.innerHTML = '<span class="wp-loader"></span>'; }
+  smartFindOnOtherLang(R.lang, wCur.paraIdx, wCur.sentence, word);
 }
 
 function closeWPopup(){
@@ -159,6 +177,9 @@ async function translateWord(){
     const popup = document.getElementById('wPopup');
     const tr = r.meanings?.[0]?.translation || '';
     const trc = r.transcription || '';
+    const book = S.books.find(b => b.id === R.bookId);
+    const canSearchOnOther = book && book.enChaps && book.ruChaps;
+    const otherLangLabel = R.lang === 'en' ? 'RU' : 'EN';
 
     popup.innerHTML = `
       <div class="wp-word">${escapeHtml(word)}</div>
@@ -167,6 +188,7 @@ async function translateWord(){
       <div class="wp-ctx">${escapeHtml(wCur.sentence)}</div>
       <div class="wp-actions">
         <button class="wp-btn pr" onclick="translateWord()">Обновить</button>
+        ${canSearchOnOther ? `<button class="wp-btn" onclick="searchOnOtherLang()" id="wpSearchBtn">🔍 На ${otherLangLabel}</button>` : ''}
         <button class="wp-btn" onclick="toggleWordDetails()" id="wpDetailsBtn">Подробно</button>
         <button class="wp-btn" onclick="saveWordFromPopup()" id="wpSaveBtn">+ В словарь</button>
         <button class="wp-btn" onclick="closeWPopup()">Закрыть</button>
@@ -204,7 +226,10 @@ async function saveWordFromPopup(){
     lang: R.lang,
     translation: r?.meanings?.[0]?.translation || '',
     fullResult: r || null,
-    srs: initSRS(),
+    cards: {
+      forward: initCard(),    // EN/RU → перевод
+      backward: initCard()    // перевод → EN/RU
+    },
     addedAt: Date.now()
   };
 
@@ -219,5 +244,5 @@ async function saveWordFromPopup(){
   document.getElementById('wpSaveBtn').textContent = '✓ В словаре';
   document.getElementById('wpSaveBtn').classList.add('saved');
   updateNavBadges();
-  showToast('Сохранено в словарь ✓');
+  showToast('Сохранено (2 карточки) ✓');
 }

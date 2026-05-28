@@ -31,6 +31,13 @@
   color:var(--accent); margin-bottom:8px;
 }
 .fc-translation{font-size:18px; margin-bottom:8px;}
+.fc-translation-front{
+  font-family:'Playfair Display',serif;
+  font-size:22px; font-weight:700;
+  color:var(--text);
+  margin-bottom:12px;
+  line-height:1.4;
+}
 .fc-transcription{
   font-size:13px; color:var(--muted);
   font-family:'JetBrains Mono',monospace; margin-bottom:8px;

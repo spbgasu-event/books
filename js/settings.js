@@ -37,3 +37,9 @@ async function clearAll(){
   updateNavBadges();
   showToast('Всё очищено');
 }
+
+async function clearSearchCacheAction(){
+  if (!confirm('Сбросить кэш умного поиска? Следующие поиски снова пойдут в API.')) return;
+  await clearSearchCache();
+  showToast('Кэш поиска очищен');
+}

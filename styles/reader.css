@@ -45,6 +45,61 @@
   font-size:20px; padding:8px; min-width:40px;
 }
 
+/* Кнопка «← вернуться» в тулбаре — появляется после умного поиска */
+.r-jump-back{
+  background:rgba(200,169,110,0.15);
+  border:1px solid rgba(200,169,110,0.4);
+  color:var(--accent);
+  font-size:18px;
+  width:34px; height:34px;
+  border-radius:8px;
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  margin-right:4px;
+}
+.r-jump-back:active{transform:scale(0.94);}
+
+/* Подсветка найденного абзаца — мягкое свечение на 3 секунды */
+.r-page p.r-found-highlight{
+  background: linear-gradient(90deg,
+    rgba(200,169,110,0.18),
+    rgba(200,169,110,0.06)
+  );
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+  margin-left: -13px;
+  border-radius: 4px;
+  animation: foundFlash 3.5s ease;
+}
+@keyframes foundFlash{
+  0%{background-color:rgba(200,169,110,0.35);}
+  100%{background-color:rgba(200,169,110,0.10);}
+}
+
+/* Индикатор «ищу соответствие» в центре экрана */
+.r-search-indicator{
+  position:fixed; left:50%; top:50%;
+  transform:translate(-50%, -50%) scale(0.95);
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:18px 24px;
+  display:flex; flex-direction:column;
+  align-items:center; gap:10px;
+  z-index:500;
+  box-shadow:0 12px 40px rgba(0,0,0,0.6);
+  opacity:0; pointer-events:none;
+  transition:opacity .2s, transform .2s;
+  font-size:13px;
+  color:var(--muted);
+}
+.r-search-indicator.show{
+  opacity:1; transform:translate(-50%, -50%) scale(1);
+}
+.r-search-indicator .wp-loader{
+  width:20px; height:20px; border-width:2.5px;
+}
+
 /* Контейнер постраничного режима — без скролла, всё помещается */
 .r-pager{
   flex:1; position:relative; overflow:hidden;

@@ -22,6 +22,8 @@ function openBook(id){
   if (!b) return;
 
   R.bookId = id;
+  R.jumpStack = [];
+  R.highlightParaIdx = null;
   const prog = b.progress || {chapIdx:0, lang:'en', paraIdx:0};
   R.lang = prog.lang || (b.enChaps ? 'en' : 'ru');
   R.chapIdx = prog.chapIdx || 0;
@@ -30,6 +32,7 @@ function openBook(id){
   document.getElementById('readerPage').classList.add('active');
   document.body.classList.add('reading');
   updateLangToggle();
+  updateJumpBackButton();
 
   // Откладываем рендер чтобы CSS успел применить размеры контейнера
   requestAnimationFrame(() => {
@@ -44,6 +47,9 @@ function closeReader(){
   document.getElementById('readerPage').classList.remove('active');
   document.body.classList.remove('reading');
   closeWPopup();
+  R.jumpStack = [];
+  R.highlightParaIdx = null;
+  updateJumpBackButton();
   renderLibrary();
 }
 
@@ -171,7 +177,10 @@ function wrapWords(text, paraIdx){
     const classes = ['r-word'];
     if (saved){
       classes.push('saved');
-      const state = (saved.srs && saved.srs.interval > 21) ? 'review' : 'learning';
+      // Определяем "выученность" по интервалу forward-карточки
+      const fwd = saved.cards?.forward;
+      const interval = fwd?.interval || saved.srs?.interval || 0;
+      const state = interval > 21 ? 'review' : 'learning';
       classes.push(state);
     }
     return `<span class="${classes.join(' ')}" data-w="${escapeHtml(m)}" data-p="${paraIdx}">${escapeHtml(m)}</span>`;
@@ -260,13 +269,11 @@ function prevPage(){
 }
 
 /**
- * Переключение языка с учётом ручного align.
+ * Переключение языка — простое и предсказуемое:
+ * переходим в НАЧАЛО парной главы (по align или по тому же номеру).
  *
- * Если у книги есть alignment.pairs — ищем парную главу в другом языке.
- * Если соответствия нет — показываем сообщение и не переключаемся.
- * Если align не задан — фолбэк на «та же глава по номеру» (как раньше).
- *
- * Внутри главы — сохраняем paraIdx с зажиманием по длине новой главы.
+ * Внутри главы пользователь сам пролистает до нужного места.
+ * Если потерялся — есть умный поиск (кнопка «Найти на RU/EN» в попапе слова).
  */
 function switchReaderLang(lang){
   const book = S.books.find(b => b.id === R.bookId);
@@ -279,11 +286,10 @@ function switchReaderLang(lang){
     return;
   }
 
-  const paraIdx = currentAnchor();
   const newChapIdx = findAlignedChapter(book, R.chapIdx, R.lang, lang);
 
   if (newChapIdx < 0){
-    showToast('Эта глава не привязана к другому языку. Сделай сведение через ⇄');
+    showToast('Эта глава не привязана к другому языку. Открой ⇄ для сведения');
     return;
   }
 
@@ -292,7 +298,7 @@ function switchReaderLang(lang){
 
   updateLangToggle();
   paginateCurrentChapter();
-  R.pageIdx = paraIdxToPageIndex(paraIdx);
+  R.pageIdx = 0;
   renderCurrentPage();
   closeWPopup();
 }
@@ -401,4 +407,54 @@ function jumpToChap(i){
   R.pageIdx = 0;
   renderCurrentPage();
   closeOverlay('chapPickerOverlay');
+}
+
+/**
+ * Запускает LLM-разметку глав для текущего языка текущей книги.
+ * Используется когда автомат не справился и в книге одна-две большие "главы".
+ */
+async function detectChaptersAction(){
+  const book = S.books.find(b => b.id === R.bookId);
+  if (!book) return;
+  closeOverlay('readerMenuOverlay');
+
+  if (!S.settings.apiKey){
+    showToast('Нужен API ключ — Настройки');
+    return;
+  }
+
+  const langLabel = R.lang === 'en' ? 'английского' : 'русского';
+  if (!confirm(`Использовать LLM для поиска глав в ${langLabel} тексте?\nЗапрос стоит ~$0.002. Текущая разметка будет заменена.`)) return;
+
+  showToast('Анализирую структуру...');
+
+  try {
+    const newChaps = await detectChaptersViaLLM(book, R.lang);
+    if (!newChaps || newChaps.length < 2){
+      showToast('Не нашёл главы. Попробуй задать разделитель вручную');
+      return;
+    }
+
+    // Записываем новую разбивку
+    if (R.lang === 'en') book.enChaps = newChaps;
+    else book.ruChaps = newChaps;
+
+    // Сбрасываем прогресс — старые номера глав уже не имеют смысла
+    book.progress = {chapIdx:0, lang:R.lang, paraIdx:0};
+    // Сбрасываем alignment — старые номера тоже устарели
+    book.alignment = null;
+
+    await saveBook(book);
+
+    // Перезагружаем читалку
+    R.chapIdx = 0;
+    paginateCurrentChapter();
+    R.pageIdx = 0;
+    renderCurrentPage();
+
+    showToast(`Найдено ${newChaps.length} глав ✓`);
+  } catch(e){
+    console.error(e);
+    showToast('Не получилось: ' + e.message);
+  }
 }

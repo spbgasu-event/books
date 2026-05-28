@@ -26,9 +26,20 @@ function renderWordsList(filter = ''){
   }
 
   c.innerHTML = items.map(w => {
-    const srs = w.srs;
-    const due = !srs || (srs.dueDate <= now);
-    const daysLeft = srs ? Math.ceil((srs.dueDate - now) / 86400000) : 0;
+    // Определяем статус по минимальному dueDate из двух карточек
+    let minDue = now;
+    let hasCards = false;
+    if (w.cards){
+      if (w.cards.forward){ minDue = Math.min(minDue === now ? Infinity : minDue, w.cards.forward.dueDate); hasCards = true; }
+      if (w.cards.backward){ minDue = Math.min(minDue === now ? Infinity : minDue, w.cards.backward.dueDate); hasCards = true; }
+    } else if (w.srs){
+      minDue = w.srs.dueDate;
+      hasCards = true;
+    }
+    if (!hasCards) minDue = now;
+
+    const due = minDue <= now;
+    const daysLeft = Math.ceil((minDue - now) / 86400000);
     const dueLabel = due
       ? 'К повторению'
       : (daysLeft <= 1 ? 'Завтра' : daysLeft + 'д');

@@ -37,6 +37,13 @@ function dbGetAll(store){
     req.onerror = () => rej(req.error);
   });
 }
+function dbGet(store, key){
+  return new Promise((res, rej) => {
+    const req = tx(store).get(key);
+    req.onsuccess = () => res(req.result || null);
+    req.onerror = () => rej(req.error);
+  });
+}
 function dbPut(store, value){
   return new Promise((res, rej) => {
     const req = tx(store, 'readwrite').put(value);

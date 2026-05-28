@@ -269,37 +269,267 @@ function ensureJSZip(){
 
 /**
  * Разбиение полного текста на главы.
- * Если задан разделитель — режем по нему. Иначе — автоматически по абзацам.
+ *
+ * Стратегии (по убыванию приоритета):
+ *   1. Пользовательский разделитель (если задан)
+ *   2. Стандартные паттерны заголовков (Chapter N, Глава N, римские, etc.)
+ *   3. «Короткий абзац среди длинных» (заголовки обычно 1-3 слова)
+ *   4. Большие пустые промежутки (4+ переносов строки)
+ *   5. Фолбэк: вся книга одной главой (без синтетических «Часть 1, 2, 3»)
+ *
+ * Если глав мало (1-2) — не пытаемся резать синтетически.
+ * Пользователь может потом нажать «Найти главы через LLM» вручную.
  */
 function parseChaps(text, sep){
-  if (!text) return null;
+  if (!text || text.trim().length < 100) return null;
 
+  const trimmed = text.trim();
+
+  // ─── Стратегия 1: пользовательский разделитель ───
   if (sep && sep.trim()){
-    const esc = sep.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const result = splitByCustomSeparator(trimmed, sep.trim());
+    if (result && result.length > 1) return result;
+  }
+
+  // ─── Стратегия 2: стандартные паттерны заголовков ───
+  const byPatterns = splitByChapterPatterns(trimmed);
+  if (byPatterns && byPatterns.length >= 3) return byPatterns;
+
+  // ─── Стратегия 3: короткие строки как разделители ───
+  const byShortLines = splitByShortLines(trimmed);
+  if (byShortLines && byShortLines.length >= 3) return byShortLines;
+
+  // ─── Стратегия 4: большие пустоты ───
+  const byGaps = splitByLargeGaps(trimmed);
+  if (byGaps && byGaps.length >= 3) return byGaps;
+
+  // ─── Если выше что-то нашло хоть 2 главы — берём это ───
+  for (const candidate of [byPatterns, byShortLines, byGaps]){
+    if (candidate && candidate.length >= 2) return candidate;
+  }
+
+  // ─── Фолбэк: вся книга одной главой ───
+  // Без синтетических «Часть 1, 2, 3» — пользователь сам решит, нужно ли резать
+  return [{ title: 'Книга целиком', content: trimmed }];
+}
+
+function splitByCustomSeparator(text, sep){
+  try {
+    const esc = sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp('(?=^' + esc + ')', 'im');
-    const parts = text.split(re).map(p => p.trim()).filter(p => p.length > 20);
-    if (parts.length > 1){
-      return parts.map((p, i) => {
-        const first = p.split('\n')[0].trim();
-        return {
-          title: first || ('Глава ' + (i+1)),
-          content: p.slice(first.length).trim() || p
-        };
-      });
+    const parts = text.split(re).map(p => p.trim()).filter(p => p.length > 30);
+    if (parts.length <= 1) return null;
+    return parts.map((p, i) => extractChapter(p, i));
+  } catch(e){ return null; }
+}
+
+/**
+ * Регулярки для типичных заголовков глав.
+ * Должны стоять в НАЧАЛЕ строки и заканчиваться переносом строки.
+ */
+function splitByChapterPatterns(text){
+  // Перечень паттернов в порядке убывания специфичности
+  const patterns = [
+    // Английские
+    /^Chapter\s+[IVXLCDM\d]+/im,
+    /^CHAPTER\s+[IVXLCDM\d]+/m,
+    /^Ch\.\s*\d+/im,
+    // Русские
+    /^Глава\s+[IVXLCDM\d]+/im,
+    /^ГЛАВА\s+[IVXLCDM\d]+/m,
+    /^Глава\s+(первая|вторая|третья|четвертая|пятая|шестая|седьмая|восьмая|девятая|десятая)/im,
+    // Универсальные
+    /^Part\s+[IVXLCDM\d]+/im,
+    /^Часть\s+[IVXLCDM\d]+/im,
+    // Короткие номера в начале строки (1., I., § 1.)
+    /^(?:§\s*)?[IVXLCDM]+\.\s*$/m,
+    /^\d{1,3}\.\s*$/m,
+  ];
+
+  // Берём самый часто встречающийся паттерн
+  let bestMatches = [];
+  let bestPattern = null;
+
+  for (const pat of patterns){
+    const global = new RegExp(pat.source, pat.flags.includes('g') ? pat.flags : pat.flags + 'g');
+    const matches = [...text.matchAll(global)];
+    if (matches.length > bestMatches.length){
+      bestMatches = matches;
+      bestPattern = global;
     }
   }
 
-  const paras = text.split(/\n{2,}/).map(p => p.trim()).filter(p => p.length > 30);
-  if (!paras.length) return [{title:'Текст', content:text}];
+  if (!bestMatches.length || bestMatches.length < 2) return null;
 
-  const chapCount = Math.min(15, Math.max(1, Math.ceil(paras.length / 20)));
-  const size = Math.ceil(paras.length / chapCount);
-  const chaps = [];
-  for (let i = 0; i < paras.length; i += size){
-    chaps.push({
-      title: 'Часть ' + (chaps.length + 1),
-      content: paras.slice(i, i + size).join('\n\n')
-    });
+  // Режем по позициям совпадений
+  const parts = [];
+  for (let i = 0; i < bestMatches.length; i++){
+    const start = bestMatches[i].index;
+    const end = (i + 1 < bestMatches.length) ? bestMatches[i + 1].index : text.length;
+    const chunk = text.slice(start, end).trim();
+    if (chunk.length > 30) parts.push(chunk);
   }
-  return chaps;
+
+  if (parts.length <= 1) return null;
+  return parts.map((p, i) => extractChapter(p, i));
+}
+
+/**
+ * Эвристика «короткая строка среди длинных».
+ * Заголовки обычно — короткая строка (1-6 слов), окружённая длинными абзацами.
+ */
+function splitByShortLines(text){
+  const lines = text.split(/\n+/).map(l => l.trim());
+  if (lines.length < 20) return null;
+
+  // Средняя длина непустой строки
+  const nonEmpty = lines.filter(l => l.length > 0);
+  const avgLen = nonEmpty.reduce((s, l) => s + l.length, 0) / nonEmpty.length;
+
+  // Слишком короткие книги — здесь не сработает
+  if (avgLen < 60) return null;
+
+  // Кандидаты — строки <= 50 символов и не выглядящие как фрагмент предложения (нет точки/запятой в конце)
+  const breakIndices = [];
+  for (let i = 0; i < lines.length; i++){
+    const l = lines[i];
+    if (l.length === 0) continue;
+    const wordCount = l.split(/\s+/).length;
+    if (l.length <= 50 && wordCount <= 8 && !/[,;]$/.test(l) && !/[a-zа-я]$/.test(l)){
+      // Дополнительно: следующая значимая строка должна быть длинной (это начало текста главы)
+      let nextNonEmpty = '';
+      for (let j = i + 1; j < lines.length; j++){
+        if (lines[j].length > 0){ nextNonEmpty = lines[j]; break; }
+      }
+      if (nextNonEmpty.length >= 60){
+        breakIndices.push(i);
+      }
+    }
+  }
+
+  if (breakIndices.length < 2) return null;
+
+  // Слишком много кандидатов — это не главы (страница объявлений, оглавление и т.д.)
+  if (breakIndices.length > lines.length / 5) return null;
+
+  const parts = [];
+  for (let i = 0; i < breakIndices.length; i++){
+    const startLine = breakIndices[i];
+    const endLine = (i + 1 < breakIndices.length) ? breakIndices[i + 1] : lines.length;
+    const chunk = lines.slice(startLine, endLine).join('\n').trim();
+    if (chunk.length > 100) parts.push(chunk);
+  }
+
+  if (parts.length <= 1) return null;
+  return parts.map((p, i) => extractChapter(p, i));
+}
+
+/**
+ * Разрез по большим пустотам (4+ переносов подряд).
+ */
+function splitByLargeGaps(text){
+  const parts = text.split(/\n{4,}/).map(p => p.trim()).filter(p => p.length > 100);
+  if (parts.length <= 1) return null;
+  return parts.map((p, i) => extractChapter(p, i));
+}
+
+/**
+ * Из куска текста извлекает {title, content}.
+ * Заголовок — первая строка если она короткая.
+ */
+function extractChapter(chunk, idx){
+  const lines = chunk.split(/\n+/).map(l => l.trim()).filter(l => l.length > 0);
+  if (!lines.length) return { title: 'Глава ' + (idx + 1), content: chunk };
+
+  const first = lines[0];
+  let title, content;
+  if (first.length <= 80){
+    title = first;
+    content = lines.slice(1).join('\n\n') || chunk;
+  } else {
+    title = 'Глава ' + (idx + 1);
+    content = chunk;
+  }
+  return { title, content };
+}
+
+/**
+ * LLM-разметка глав: посылаем превью текста в Mistral, получаем номера строк
+ * где предположительно начинаются главы. Используется когда автомат не справился.
+ *
+ * @param {Object} book — книга для перепарсинга
+ * @param {string} lang — 'en' или 'ru'
+ * @returns {Promise<Array>} новый массив глав
+ */
+async function detectChaptersViaLLM(book, lang){
+  const chaps = (lang === 'en' ? book.enChaps : book.ruChaps) || [];
+  if (!chaps.length) throw new Error('Нет текста для разметки');
+
+  // Восстанавливаем полный текст
+  const fullText = chaps.map(c => (c.title ? c.title + '\n\n' : '') + c.content).join('\n\n');
+  const lines = fullText.split(/\n/);
+
+  // Берём короткие строки — это вероятные кандидаты в заголовки
+  const candidates = [];
+  for (let i = 0; i < lines.length; i++){
+    const l = lines[i].trim();
+    if (l.length === 0) continue;
+    if (l.length <= 80){
+      candidates.push({lineNum: i, text: l});
+    }
+  }
+
+  // Слишком много кандидатов — берём только первые 200
+  const sample = candidates.slice(0, 200);
+  if (!sample.length) throw new Error('Нет коротких строк для анализа');
+
+  const cfg = getApiCfg();
+  if (!cfg.key) throw new Error('API ключ не задан');
+
+  const prompt = `You are analyzing a book to find chapter headings.
+Below is a list of short lines from the text (likely candidates for chapter titles, but most are NOT actual chapter headings — only some are).
+
+Return ONLY a JSON array of line numbers that are REAL chapter headings.
+A real heading: starts a chapter, looks like "Chapter X", "Глава N", "Part I", a Roman numeral, or a distinct short title.
+NOT a heading: a short dialogue line, a short paragraph, a stage direction, a fragment.
+
+Lines:
+${sample.map(c => `[${c.lineNum}] ${c.text}`).join('\n')}
+
+Return: {"chapter_lines": [num, num, ...]}
+If you can't reliably identify chapter headings, return {"chapter_lines": []}.`;
+
+  const res = await fetch(cfg.url, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + cfg.key},
+    body: JSON.stringify({
+      model: cfg.model,
+      temperature: 0.1,
+      max_tokens: 800,
+      messages: [{role:'user', content: prompt}]
+    })
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'HTTP ' + res.status);
+  const raw = data.choices?.[0]?.message?.content || '';
+  const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+  const chapterLines = parsed.chapter_lines || [];
+
+  if (!chapterLines.length) throw new Error('LLM не нашёл заголовков глав');
+
+  // Режем текст по найденным строкам
+  chapterLines.sort((a, b) => a - b);
+  const result = [];
+  for (let i = 0; i < chapterLines.length; i++){
+    const startLine = chapterLines[i];
+    const endLine = (i + 1 < chapterLines.length) ? chapterLines[i + 1] : lines.length;
+    const chunk = lines.slice(startLine, endLine).join('\n').trim();
+    if (chunk.length > 50){
+      result.push(extractChapter(chunk, i));
+    }
+  }
+
+  if (!result.length) throw new Error('После разметки главы пустые');
+  return result;
 }

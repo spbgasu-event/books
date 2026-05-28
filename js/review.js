@@ -1,9 +1,13 @@
 'use strict';
 
 /**
- * Экран карточек. Очередь формируется из слов, у которых dueDate <= now.
- * Пока используем простой вариант "слово→перевод"; во второй итерации
- * переделаем на "контекст с выделенным словом" + обратные карточки RU→EN.
+ * Экран карточек.
+ *
+ * Карточка forward: контекст с выделенным словом → угадай перевод
+ * Карточка backward: перевод → угадай оригинальное слово (без контекста)
+ *
+ * Очередь формируется из всех слов где хоть одна сторона due.
+ * Каждое слово в очереди появляется столько раз, сколько у него сторон due.
  */
 
 let revQueue = [];
@@ -12,7 +16,7 @@ let revFlipped = false;
 let revStats = {};
 
 function renderReview(){
-  revQueue = getDueWords().sort((a, b) => (a.srs?.dueDate||0) - (b.srs?.dueDate||0));
+  revQueue = getDueCards();
   revIdx = 0;
   revFlipped = false;
   revStats = {again:0, hard:0, good:0, easy:0};
@@ -43,36 +47,68 @@ function renderReviewContent(){
     return;
   }
 
-  const w = revQueue[revIdx];
-  const srs = w.srs || initSRS();
-  const ctx = w.context || w.word;
+  const item = revQueue[revIdx];
+  const w = item.word;
+  const direction = item.direction;
+  const card = w.cards[direction];
 
-  // Выделяем целевое слово в контексте
-  const ctxHl = ctx.replace(
-    new RegExp(`\\b(${w.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'i'),
-    '<span class="target-word">$1</span>'
-  );
+  const isForward = direction === 'forward';
+  const directionLabel = isForward ? `${w.lang === 'en' ? 'EN' : 'RU'} → ${w.lang === 'en' ? 'RU' : 'EN'}` : `${w.lang === 'en' ? 'RU' : 'EN'} → ${w.lang === 'en' ? 'EN' : 'RU'}`;
+
+  // Готовим лицевую сторону
+  let frontHtml;
+  if (isForward){
+    // Контекст с выделенным словом
+    const ctx = w.context || w.word;
+    const ctxHl = ctx.replace(
+      new RegExp(`\\b(${escapeRegex(w.word)})\\b`, 'i'),
+      '<span class="target-word">$1</span>'
+    );
+    frontHtml = `
+      <div class="fc-direction">${directionLabel} · Вспомни перевод</div>
+      <div class="fc-context">${ctxHl}</div>
+    `;
+  } else {
+    // Только перевод, без контекста
+    frontHtml = `
+      <div class="fc-direction">${directionLabel} · Вспомни слово на ${w.lang === 'en' ? 'английском' : 'русском'}</div>
+      <div class="fc-translation-front">${escapeHtml(w.translation || '—')}</div>
+    `;
+  }
+
+  // Готовим оборотную сторону
+  let backHtml = '';
+  if (isForward){
+    backHtml = `
+      ${w.fullResult?.transcription ? `<div class="fc-transcription">${escapeHtml(w.fullResult.transcription)}</div>` : ''}
+      <div class="fc-translation"><strong>${escapeHtml(w.translation || '')}</strong></div>
+      ${w.fullResult?.meanings?.[0]?.example_original ? `<div style="font-size:12px;color:var(--muted);font-style:italic;margin-top:8px;">${escapeHtml(w.fullResult.meanings[0].example_original)}</div>` : ''}
+    `;
+  } else {
+    backHtml = `
+      <div class="fc-word-big">${escapeHtml(w.word)}</div>
+      ${w.fullResult?.transcription ? `<div class="fc-transcription">${escapeHtml(w.fullResult.transcription)}</div>` : ''}
+      ${w.context ? `<div class="fc-context" style="font-size:13px;color:var(--muted);margin-top:8px;">${escapeHtml(w.context.slice(0, 200))}${w.context.length > 200 ? '...' : ''}</div>` : ''}
+    `;
+  }
 
   cont.innerHTML = `
     <div class="review-stats">
       <span class="rs">${revIdx+1} / ${revQueue.length}</span>
     </div>
     <div class="fc-card" id="fcCard" onclick="flipCard()">
-      <div class="fc-direction">Вспомни перевод</div>
-      <div class="fc-context">${ctxHl}</div>
+      ${frontHtml}
       <div class="fc-hint">Из «${escapeHtml(w.bookTitle || '')}»</div>
       <div id="fcAnswer" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px;width:100%;">
-        ${w.fullResult?.transcription ? `<div class="fc-transcription">${escapeHtml(w.fullResult.transcription)}</div>` : ''}
-        <div class="fc-translation"><strong>${escapeHtml(w.translation || '')}</strong></div>
-        ${w.fullResult?.meanings?.[0]?.example_original ? `<div style="font-size:12px;color:var(--muted);font-style:italic;margin-top:8px;">${escapeHtml(w.fullResult.meanings[0].example_original)}</div>` : ''}
+        ${backHtml}
       </div>
     </div>
     <button class="review-flip-btn" id="revFlipBtn" onclick="flipCard()">Показать ответ</button>
     <div class="review-btns" id="revBtns" style="margin-top:12px;">
-      <button class="rb rb-again" onclick="gradeCard(0)"><span>Снова</span><span class="rb-interval">${intervalLabel(srs,0)}</span></button>
-      <button class="rb rb-hard"  onclick="gradeCard(1)"><span>Сложно</span><span class="rb-interval">${intervalLabel(srs,1)}</span></button>
-      <button class="rb rb-good"  onclick="gradeCard(2)"><span>Хорошо</span><span class="rb-interval">${intervalLabel(srs,2)}</span></button>
-      <button class="rb rb-easy"  onclick="gradeCard(3)"><span>Легко</span><span class="rb-interval">${intervalLabel(srs,3)}</span></button>
+      <button class="rb rb-again" onclick="gradeCard(0)"><span>Снова</span><span class="rb-interval">${intervalLabel(card,0)}</span></button>
+      <button class="rb rb-hard"  onclick="gradeCard(1)"><span>Сложно</span><span class="rb-interval">${intervalLabel(card,1)}</span></button>
+      <button class="rb rb-good"  onclick="gradeCard(2)"><span>Хорошо</span><span class="rb-interval">${intervalLabel(card,2)}</span></button>
+      <button class="rb rb-easy"  onclick="gradeCard(3)"><span>Легко</span><span class="rb-interval">${intervalLabel(card,3)}</span></button>
     </div>
   `;
 }
@@ -86,12 +122,15 @@ function flipCard(){
 }
 
 async function gradeCard(grade){
-  const w = revQueue[revIdx];
-  w.srs = applyGrade(w.srs || initSRS(), grade);
+  const item = revQueue[revIdx];
+  const w = item.word;
+  const dir = item.direction;
 
-  // Синхронизируем с S.words по id
+  w.cards[dir] = applyGrade(w.cards[dir], grade);
+
+  // Синхронизируем с S.words
   const idx = S.words.findIndex(x => x.id === w.id);
-  if (idx >= 0) S.words[idx].srs = w.srs;
+  if (idx >= 0) S.words[idx] = w;
 
   await saveWord(w);
 
@@ -104,4 +143,8 @@ async function gradeCard(grade){
   revFlipped = false;
   renderReviewContent();
   updateNavBadges();
+}
+
+function escapeRegex(s){
+  return String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

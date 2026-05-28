@@ -135,6 +135,13 @@
       </div>
       <div class="settings-row">
         <div>
+          <div class="settings-row-label">Очистить кэш поиска</div>
+          <div class="settings-row-hint">Сбросит сохранённые соответствия абзацев</div>
+        </div>
+        <button class="btn-sec" onclick="clearSearchCacheAction()">Сбросить</button>
+      </div>
+      <div class="settings-row">
+        <div>
           <div class="settings-row-label">Очистить всё</div>
           <div class="settings-row-hint">Удалит книги, словарь и карточки</div>
         </div>
@@ -143,7 +150,7 @@
     </div>
 
     <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:20px;">
-      LinguaRead · версия 0.2 · локально на устройстве
+      LinguaRead · версия 0.5 · локально на устройстве
     </div>
   </div>
 </div>
@@ -153,6 +160,7 @@
   <div class="r-toolbar" id="rToolbar">
     <button class="r-back" onclick="closeReader()">←</button>
     <div class="r-title" id="rTitle">Книга</div>
+    <button class="r-jump-back" id="rJumpBack" onclick="jumpBack()" style="display:none;" title="Вернуться">↶</button>
     <div class="lang-toggle" id="rLangToggle">
       <button class="lt-btn en" data-lang="en" onclick="switchReaderLang('en')">EN</button>
       <button class="lt-btn ru" data-lang="ru" onclick="switchReaderLang('ru')">RU</button>
@@ -238,6 +246,13 @@
         <button class="ca-btn" onclick="adjustReaderFont(1)">A＋</button>
       </div>
     </div>
+    <div class="settings-row" style="cursor:pointer;" onclick="detectChaptersAction()">
+      <div>
+        <div class="settings-row-label">🔍 Найти главы через LLM</div>
+        <div class="settings-row-hint">Перепарсить текущий язык, если глав мало или они странные</div>
+      </div>
+      <span style="color:var(--muted);">›</span>
+    </div>
     <div class="modal-actions">
       <button class="btn-sec" onclick="closeOverlay('readerMenuOverlay')">Закрыть</button>
     </div>
@@ -296,6 +311,7 @@
 <script src="js/srs.js"></script>
 <script src="js/word-popup.js"></script>
 <script src="js/alignment.js"></script>
+<script src="js/smart-search.js"></script>
 <script src="js/reader.js"></script>
 <script src="js/library.js"></script>
 <script src="js/review.js"></script>

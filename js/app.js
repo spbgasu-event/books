@@ -50,6 +50,7 @@ window.addEventListener('resize', () => {
     await openDB();
     await migrateFromLocalStorage();
     await loadFromDB();
+    await loadSearchCache();
   } catch(e){
     console.error('DB init failed', e);
     showToast('Ошибка хранилища');

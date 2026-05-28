@@ -1,5 +1,5 @@
 // Версия меняется при каждом релизе — это триггер для обновления кэша
-const VERSION = 'v0.3.0';
+const VERSION = 'v0.5.0';
 const APP_CACHE = `linguaread-app-${VERSION}`;
 const FONTS_CACHE = `linguaread-fonts-${VERSION}`;
 
@@ -22,6 +22,7 @@ const APP_SHELL = [
   './js/srs.js',
   './js/word-popup.js',
   './js/alignment.js',
+  './js/smart-search.js',
   './js/reader.js',
   './js/library.js',
   './js/review.js',
